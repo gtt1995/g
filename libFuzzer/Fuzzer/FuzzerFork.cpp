@@ -114,7 +114,7 @@ struct GlobalEnv {
         .count();
   }
 
-  FuzzJob *CreateNewJob(size_t JobId) {
+  FuzzJob *CreateNewJob(size_t JobId,int Total) {
     Command Cmd(Args);
     Cmd.removeFlag("fork");
     Cmd.removeFlag("runs");
@@ -135,11 +135,22 @@ struct GlobalEnv {
     std::string Seeds;
     if (size_t CorpusSubsetSize =
             std::min(Files.size(), (size_t)sqrt(Files.size() + 2))) {
+      size_t AverageSize = Files.size()/Total +1;
       auto Time1 = std::chrono::system_clock::now();
+      size_t StartIndex = ((JobId-1)%Total) *  AverageSize;
       for (size_t i = 0; i < CorpusSubsetSize; i++) {
-        auto &SF = Files[Rand->SkewTowardsLast(Files.size())];
-        Seeds += (Seeds.empty() ? "" : ",") + SF;
-        CollectDFT(SF);
+	size_t j = Rand->SkewTowardsLast( AverageSize);
+	size_t m = j + StartIndex;
+        if (m < Files.size()) {
+		auto &SF = Files[m];
+        	Seeds += (Seeds.empty() ? "" : ",") + SF;
+        	CollectDFT(SF);
+	}
+	else  {
+		auto &SF = Files[Files.size()-1];
+        	Seeds += (Seeds.empty() ? "" : ",") + SF;
+        	CollectDFT(SF);
+	} 
       }
       auto Time2 = std::chrono::system_clock::now();
       Job->DftTimeInSeconds = duration_cast<seconds>(Time2 - Time1).count();
@@ -332,7 +343,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
   Vector<std::thread> Threads;
   for (int t = 0; t < NumJobs; t++) {
     Threads.push_back(std::thread(WorkerThread, &FuzzQ, &MergeQ));
-    FuzzQ.Push(Env.CreateNewJob(JobId++));
+    FuzzQ.Push(Env.CreateNewJob(JobId++,NumJobs));
   }
 
   while (true) {
@@ -390,7 +401,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       break;
     }
 
-    FuzzQ.Push(Env.CreateNewJob(JobId++));
+    FuzzQ.Push(Env.CreateNewJob(JobId++,NumJobs));
   }
 
   for (auto &T : Threads)

@@ -26,6 +26,7 @@
 #include <queue>
 #include <sstream>
 #include <thread>
+#include <random>
 
 namespace fuzzer {
 
@@ -34,6 +35,44 @@ struct Stats {
   size_t peak_rss_mb = 0;
   size_t average_exec_per_sec = 0;
 };
+
+struct SubCorpus {
+  size_t Id;
+  double Energy;
+  double Reward;
+  //Set<uint32_t> AddFeatures = 0;
+  double AddFeatures = 0;
+  //Set<uint32_t> AddCov = 0;
+  double AddCov = 0;
+  double Execs = 0;
+  double AddFiles = 0;
+};
+double arr[120] = {0};
+void Weight(double * arr,struct SubCorpus * SC,int NumCorpus){
+	double sum = 0;
+	for (int i = 0; i<NumCorpus;i++){
+		sum += SC[i].Energy;
+		arr[i] = sum;
+	}
+}
+int PickWithWeight(double * arr,size_t NumCorpus){
+	std::mt19937 Rng;
+	Rng.seed(std::random_device()());
+	std::uniform_real_distribution<double> RAnd(0,arr[NumCorpus-1]);
+	double randomNum = RAnd(Rng);
+	int left = 0,right = NumCorpus - 1;
+	while (left<right){
+		int mid = left + ((right - left) >> 1);
+		if (arr[mid] == randomNum){
+			return mid;
+		}else if (arr[mid] > randomNum){
+			right = mid;
+		}else{
+			left = mid + 1;
+		}
+	}
+	return left;
+}
 
 static Stats ParseFinalStatsFromLog(const std::string &LogPath) {
   std::ifstream In(LogPath);
@@ -102,7 +141,8 @@ struct GlobalEnv {
   size_t NumTimeouts = 0;
   size_t NumOOMs = 0;
   size_t NumCrashes = 0;
-
+  
+  
 
   size_t NumRuns = 0;
 
@@ -114,7 +154,9 @@ struct GlobalEnv {
         .count();
   }
 
-  FuzzJob *CreateNewJob(size_t JobId,int Total) {
+
+
+  FuzzJob *CreateNewJob(size_t JobId,int Total, size_t CorpusId) {
     Command Cmd(Args);
     Cmd.removeFlag("fork");
     Cmd.removeFlag("runs");
@@ -137,9 +179,9 @@ struct GlobalEnv {
             std::min(Files.size(), (size_t)sqrt(Files.size() + 2))) {
       size_t AverageSize = Files.size()/Total +1;
       auto Time1 = std::chrono::system_clock::now();
-      size_t StartIndex = ((JobId-1)%Total) *  AverageSize;
+      size_t StartIndex = CorpusId *  AverageSize;
       for (size_t i = 0; i < CorpusSubsetSize; i++) {
-	size_t j = Rand->SkewTowardsLast( AverageSize);
+	size_t j = Rand->SkewTowardsLast(AverageSize);
 	size_t m = j + StartIndex;
         if (m < Files.size()) {
 		auto &SF = Files[m];
@@ -188,7 +230,7 @@ struct GlobalEnv {
     return Job;
   }
 
-  void RunOneMergeJob(FuzzJob *Job) {
+  void RunOneMergeJob(FuzzJob *Job, struct SubCorpus * SC) {
     auto Stats = ParseFinalStatsFromLog(Job->LogPath);
     NumRuns += Stats.number_of_executed_units;
 
@@ -217,6 +259,7 @@ struct GlobalEnv {
            NumRuns, Cov.size(), Features.size(), Files.size(),
            Stats.average_exec_per_sec, NumOOMs, NumTimeouts, NumCrashes,
            secondsSinceProcessStartUp(), Job->JobId, Job->DftTimeInSeconds);
+    SC->Execs = (double)Stats.average_exec_per_sec;
 
     if (MergeCandidates.empty()) return;
 
@@ -232,11 +275,25 @@ struct GlobalEnv {
     }
     Features.insert(NewFeatures.begin(), NewFeatures.end());
     Cov.insert(NewCov.begin(), NewCov.end());
+    SC->AddFeatures = (double)NewFeatures.size();
+    SC->AddCov = (double)NewCov.size();
+    SC->AddFiles = (double)FilesToAdd.size();
     for (auto Idx : NewCov)
       if (auto *TE = TPC.PCTableEntryByIdx(Idx))
         if (TPC.PcIsFuncEntry(TE))
           PrintPC("  NEW_FUNC: %p %F %L\n", "",
                   TPC.GetNextInstructionPc(TE->PC));
+
+    SC->Reward = 0.01*SC->Execs + 0.1*SC->AddFeatures + 0.1*SC->AddCov + 0.1*SC->AddFiles;
+    SC->Energy = 0.3*SC->Reward + (1 - 0.3)*SC->Energy; 
+    SC->Execs = 0 ;
+    SC->AddFeatures = 0 ;
+    SC->AddCov =  0;
+    SC->AddFiles =  0;
+
+    //根据当前corpus的reward，计算其最新的能量（全局变量）并赋值给当前Corpus;
+    //E(B)=a*R+(1-a)*E(B);E=E1/(E1+E2+E3....)；
+    //然后清空当前Id的Corpus.RewardFeatures，Corpus.RewardCov，Corpus.RewardExecs
 
   }
 
@@ -296,6 +353,17 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
                   const Vector<std::string> &CorpusDirs, int NumJobs) {
   Printf("INFO: -fork=%d: fuzzing in separate process(s)\n", NumJobs);
 
+  struct SubCorpus SC[NumJobs];
+  //struct SubCorpus * sc[NumJobs];
+  int Instance[NumJobs];
+  for (size_t j = 0; j < NumJobs; j++){
+	  SC[j].Id = j;
+	  SC[j].Energy = 50;
+	  Instance[j] = j;
+	  //sc[j] = &SC[j];
+  }
+  int CorpusId = 0;
+  int CorpusCount[120] = {0,0};
   GlobalEnv Env;
   Env.Args = Args;
   Env.CorpusDirs = CorpusDirs;
@@ -343,7 +411,8 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
   Vector<std::thread> Threads;
   for (int t = 0; t < NumJobs; t++) {
     Threads.push_back(std::thread(WorkerThread, &FuzzQ, &MergeQ));
-    FuzzQ.Push(Env.CreateNewJob(JobId++,NumJobs));
+    JobId++;
+    FuzzQ.Push(Env.CreateNewJob(JobId,NumJobs,Instance[t]));
   }
 
   while (true) {
@@ -357,9 +426,8 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       break;
     }
     Fuzzer::MaybeExitGracefully();
-
-    Env.RunOneMergeJob(Job.get());
-
+    
+    Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]]); 
     // Continue if our crash is one of the ignorred ones.
     if (Options.IgnoreTimeouts && ExitCode == Options.TimeoutExitCode)
       Env.NumTimeouts++;
@@ -392,6 +460,8 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       Printf("INFO: fuzzed for %zd seconds, wrapping up soon\n",
              Env.secondsSinceProcessStartUp());
       StopJobs();
+      for (int i=0;i<NumJobs;i++)
+	      printf("Corpus %d is chosen %d.\n",i,CorpusCount[i]);
       break;
     }
     if (Env.NumRuns >= Options.MaxNumberOfRuns) {
@@ -400,8 +470,23 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       StopJobs();
       break;
     }
-
-    FuzzQ.Push(Env.CreateNewJob(JobId++,NumJobs));
+    
+    Weight(&arr[0], SC, NumJobs);
+    int CorpusId = PickWithWeight(arr,NumJobs);
+    Instance[(((JobId++)-1)%NumJobs)] = CorpusId;
+    FuzzQ.Push(Env.CreateNewJob(JobId,NumJobs,CorpusId));
+    printf("		JobId :%d	(JobId-1)%NumJobs :%d		CorpusId : %d \n",JobId,(((JobId)-1)%NumJobs),CorpusId);
+    /*for (int i ; i<NumJobs ;i++){
+	    printf("Corpus Id is %d.\n",SC[i].Id);
+	    printf("Energy is %f.\n",SC[i].Energy);
+	    printf("Reward is %f.\n",SC[i].Reward);
+	    printf("Execs is %f.\n",SC[i].Execs);
+	    printf("AddFeatures is %f.\n",SC[i].AddFeatures);
+	    printf("AddFiles is %f \n",SC[i].AddFiles);
+	    printf("AddCov is %f.\n\n\n",SC[i].AddCov);
+    }*/
+    CorpusCount[CorpusId]++;
+    
   }
 
   for (auto &T : Threads)

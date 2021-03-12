@@ -35,7 +35,7 @@ struct Stats {
   size_t peak_rss_mb = 0;
   size_t average_exec_per_sec = 0;
 };
-
+//定义子语料库结构体
 struct SubCorpus {
   size_t Id;
   double Energy;
@@ -46,15 +46,20 @@ struct SubCorpus {
   double AddCov = 0;
   double Execs = 0;
   double AddFiles = 0;
+  double AddFunctions = 0;
+  double EnergyTotal = 0;
 };
+//arr[]存储Energy，用来根据概率选择目标子语料库
 double arr[120] = {0};
-void Weight(double * arr,struct SubCorpus * SC,int NumCorpus){
+//根据当前语料库的Energy，更新权重
+void UpdateWeight(double * arr,struct SubCorpus * SC,int NumCorpus){
 	double sum = 0;
 	for (int i = 0; i<NumCorpus;i++){
 		sum += SC[i].Energy;
 		arr[i] = sum;
 	}
 }
+//根据权重选择目标语料库
 int PickWithWeight(double * arr,size_t NumCorpus){
 	std::mt19937 Rng;
 	Rng.seed(std::random_device()());
@@ -230,7 +235,7 @@ struct GlobalEnv {
     return Job;
   }
 
-  void RunOneMergeJob(FuzzJob *Job, struct SubCorpus * SC) {
+  void RunOneMergeJob(FuzzJob *Job, struct SubCorpus * SC, double * CurrentExecs, int NumJobs) {
     auto Stats = ParseFinalStatsFromLog(Job->LogPath);
     NumRuns += Stats.number_of_executed_units;
 
@@ -259,7 +264,6 @@ struct GlobalEnv {
            NumRuns, Cov.size(), Features.size(), Files.size(),
            Stats.average_exec_per_sec, NumOOMs, NumTimeouts, NumCrashes,
            secondsSinceProcessStartUp(), Job->JobId, Job->DftTimeInSeconds);
-    SC->Execs = (double)Stats.average_exec_per_sec;
 
     if (MergeCandidates.empty()) return;
 
@@ -275,21 +279,83 @@ struct GlobalEnv {
     }
     Features.insert(NewFeatures.begin(), NewFeatures.end());
     Cov.insert(NewCov.begin(), NewCov.end());
+    SC->Execs = (double)Stats.average_exec_per_sec;
+    CurrentExecs[((Job->JobId-1)%NumJobs)] = SC->Execs;//记录最新NumJobs个Jobs的执行速度，用来归一化执行速度特征
     SC->AddFeatures = (double)NewFeatures.size();
     SC->AddCov = (double)NewCov.size();
     SC->AddFiles = (double)FilesToAdd.size();
     for (auto Idx : NewCov)
       if (auto *TE = TPC.PCTableEntryByIdx(Idx))
-        if (TPC.PcIsFuncEntry(TE))
+        if (TPC.PcIsFuncEntry(TE)){
           PrintPC("  NEW_FUNC: %p %F %L\n", "",
                   TPC.GetNextInstructionPc(TE->PC));
+	  SC->AddFunctions++;
+	}
+    //确定当前job的前numjobs个jobs的执行速度的max，min，以便归一化当前的速度
+    int j = 0;
+    double max = SC->Execs;
+    double min = SC->Execs;
+    for (int i = Job->JobId; i > (Job->JobId-NumJobs) ; i--){
+                    if (CurrentExecs[j] > max) max = CurrentExecs[j];
+                    if (CurrentExecs[j] < min) min = CurrentExecs[j];
+                    j++;
+    }
+    //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
+    if (Job->JobId >  NumJobs && Job->JobId < 100){
+	    //printf("MAX:%f	MIN:%f	SC->Execs:%f	\n",max,min,SC->Execs);
+	    SC->Execs = (SC->Execs - min)/(max - min);
+	    SC->Reward = (SC->Execs + 1) * (SC->AddFeatures + SC->AddCov + SC->AddFiles);
+	    if (SC->AddFunctions) SC->Reward = SC->Reward * 2 ;
+	    SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+	    SC->EnergyTotal+=SC->Energy;
 
-    SC->Reward = 0.01*SC->Execs + 0.1*SC->AddFeatures + 0.1*SC->AddCov + 0.1*SC->AddFiles;
-    SC->Energy = 0.3*SC->Reward + (1 - 0.3)*SC->Energy; 
+    }
+    if (Job->JobId >= 100 && Job->JobId < 300){
+            //printf("MAX:%f      MIN:%f  SC->Execs:%f    \n",max,min,SC->Execs);
+            SC->Execs = (SC->Execs - min)/(max - min);
+            SC->Reward = (SC->Execs + 1) * (SC->AddFeatures + SC->AddCov + SC->AddFiles);
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 5 ;
+            SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+	    SC->EnergyTotal+=SC->Energy;
+    }
+
+    if(Job->JobId >= 300 && Job->JobId < 700){
+            SC->Execs = (SC->Execs - min)/(max - min);
+	    SC->Reward = (SC->Execs+0.1) * (SC->AddFeatures + SC->AddCov + SC->AddFiles) * 10;
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 10 ;
+            SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+	    SC->EnergyTotal+=SC->Energy;
+    }
+    if(Job->JobId >= 700 && Job->JobId < 1000){
+            SC->Execs = (SC->Execs - min)/(max - min);
+            SC->Reward = (SC->Execs+0.1) * (SC->AddFeatures + SC->AddCov + SC->AddFiles) * 30;
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
+            SC->Energy = 0.2*SC->Reward + (1 - 0.2)*SC->Energy;
+	    SC->EnergyTotal+=SC->Energy;
+    }
+    if(Job->JobId >= 1000 && Job->JobId < 4000){
+            SC->Execs = (SC->Execs - min)/(max - min);
+            SC->Reward = (SC->Execs+0.1) * (SC->AddFeatures + SC->AddCov + SC->AddFiles) * 90;
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 100 ;
+            SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+	    SC->EnergyTotal+=SC->Energy;
+    }
+    if(Job->JobId >= 4000){
+            SC->Execs = (SC->Execs - min)/(max - min);
+            SC->Reward = (SC->Execs+0.1) * (SC->AddFeatures + SC->AddCov + SC->AddFiles) * 200;
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 300 ;
+            SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+	    SC->EnergyTotal+=SC->Energy;
+    }
+    
+    printf("Current Corpus Id: %d   SC->Execs :%f   SC->Reward :%f  S->Energy :%f	SC->AddFeatures:%f  SC->AddCov:%f  SC->AddFiles:%f  SC->AddFunctions:%f \n",SC->Id,SC->Execs,SC->Reward,SC->Energy,SC->AddFeatures,SC->AddCov,SC->AddFiles,SC->AddFunctions); 
+    //清0
+    printf("Total Energy : %f",SC->EnergyTotal);
     SC->Execs = 0 ;
     SC->AddFeatures = 0 ;
     SC->AddCov =  0;
     SC->AddFiles =  0;
+    SC->AddFunctions = 0;
 
     //根据当前corpus的reward，计算其最新的能量（全局变量）并赋值给当前Corpus;
     //E(B)=a*R+(1-a)*E(B);E=E1/(E1+E2+E3....)；
@@ -352,18 +418,20 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
                   const Vector<std::string> &Args,
                   const Vector<std::string> &CorpusDirs, int NumJobs) {
   Printf("INFO: -fork=%d: fuzzing in separate process(s)\n", NumJobs);
-
-  struct SubCorpus SC[NumJobs];
+  
+  struct SubCorpus SC[NumJobs];//定义子语料库结构体
   //struct SubCorpus * sc[NumJobs];
-  int Instance[NumJobs];
+  int Instance[NumJobs];//保存当前JobId取模后对应选取的子语料库Id
   for (size_t j = 0; j < NumJobs; j++){
 	  SC[j].Id = j;
-	  SC[j].Energy = 50;
+	  SC[j].Energy = 20;
 	  Instance[j] = j;
 	  //sc[j] = &SC[j];
   }
   int CorpusId = 0;
-  int CorpusCount[120] = {0,0};
+  int CorpusCount[120] = {0};//统计各子语料库的执行速度
+  double CurrentExecs[120] = {0};//保存当前执行速度
+  int JobExecuted = NumJobs;//记录执行的Jobs，当达到某一数值时，清空当前的子语料库能量，重新计算，避免Fuzz各阶段的不均衡
   GlobalEnv Env;
   Env.Args = Args;
   Env.CorpusDirs = CorpusDirs;
@@ -407,7 +475,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
     WriteToFile(Unit({1}), Env.StopFile());
   };
 
-  size_t JobId = 1;
+  size_t JobId = 0;
   Vector<std::thread> Threads;
   for (int t = 0; t < NumJobs; t++) {
     Threads.push_back(std::thread(WorkerThread, &FuzzQ, &MergeQ));
@@ -427,7 +495,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
     }
     Fuzzer::MaybeExitGracefully();
     
-    Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]]); 
+    Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]], CurrentExecs, NumJobs); 
     // Continue if our crash is one of the ignorred ones.
     if (Options.IgnoreTimeouts && ExitCode == Options.TimeoutExitCode)
       Env.NumTimeouts++;
@@ -470,21 +538,18 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       StopJobs();
       break;
     }
-    
-    Weight(&arr[0], SC, NumJobs);
+    JobExecuted++;
+    if (JobExecuted >= NumJobs * 4){
+	    for (int i=0; i<NumJobs ; i++){
+		    SC[i].Energy = 20;
+	    }
+	    JobExecuted = 0;
+    }
+    UpdateWeight(arr, SC, NumJobs);
     int CorpusId = PickWithWeight(arr,NumJobs);
     Instance[(((JobId++)-1)%NumJobs)] = CorpusId;
     FuzzQ.Push(Env.CreateNewJob(JobId,NumJobs,CorpusId));
-    printf("		JobId :%d	(JobId-1)%NumJobs :%d		CorpusId : %d \n",JobId,(((JobId)-1)%NumJobs),CorpusId);
-    /*for (int i ; i<NumJobs ;i++){
-	    printf("Corpus Id is %d.\n",SC[i].Id);
-	    printf("Energy is %f.\n",SC[i].Energy);
-	    printf("Reward is %f.\n",SC[i].Reward);
-	    printf("Execs is %f.\n",SC[i].Execs);
-	    printf("AddFeatures is %f.\n",SC[i].AddFeatures);
-	    printf("AddFiles is %f \n",SC[i].AddFiles);
-	    printf("AddCov is %f.\n\n\n",SC[i].AddCov);
-    }*/
+    printf("	JobId :%d	(JobId-1)%NumJobs :%d	   CorpusId : %d \n",JobId,(((JobId)-1)%NumJobs),CorpusId);
     CorpusCount[CorpusId]++;
     
   }

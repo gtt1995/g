@@ -69,6 +69,14 @@ double arr[120] = {0};
 
 void Normalization(struct Current_MAX_MIN *CR,struct SubCorpus *SC, int NumJobs){
 	int j = 0;
+	CR->maxExecs = CR->CurrentExecs[1];
+	CR->minExecs = CR->CurrentExecs[1];
+	CR->maxAddFeatures = CR->CurrentAddFeatures[1];
+	CR->minAddFeatures = CR->CurrentAddFeatures[1];
+	CR->maxAddCov = CR->CurrentAddCov[1];
+	CR->minAddCov = CR->CurrentAddCov[1];
+        CR->maxAddFiles = CR->CurrentAddFiles[1];
+        CR->minAddFiles = CR->CurrentAddFiles[1];
 	for (int i = 0; i < NumJobs ; i++){
 		if (CR->CurrentExecs[j] > CR->maxExecs) CR->maxExecs = CR->CurrentExecs[j];
 		if (CR->CurrentExecs[j] < CR->minExecs) CR->minExecs = CR->CurrentExecs[j];
@@ -229,7 +237,7 @@ struct GlobalEnv {
         	CollectDFT(SF);
 	}
 	else  {
-		auto &SF = Files[Files.size()-1];
+		auto &SF = Files[Files.size()/2];
         	Seeds += (Seeds.empty() ? "" : ",") + SF;
         	CollectDFT(SF);
 	} 
@@ -322,6 +330,14 @@ struct GlobalEnv {
     CR->CurrentAddFeatures[((Job->JobId-1)%NumJobs)] = SC->AddFeatures;//记录最新NumJobs个Jobs的执行速度，用来归一化执行速度特征
     CR->CurrentAddCov[((Job->JobId-1)%NumJobs)] = SC->AddCov;//记录最新NumJobs个Jobs的执行速度，用来归一化执行速度特征
     CR->CurrentAddFiles[((Job->JobId-1)%NumJobs)] = SC->AddFiles;//记录最新NumJobs个Jobs的执行速度，用来归一化执行速度特征
+    CR->maxExecs = SC->Execs;
+    CR->minExecs = SC->Execs;
+    CR->maxAddFeatures = SC->AddFeatures;
+    CR->minAddFeatures = SC->AddFeatures;
+    CR->maxAddCov = SC->AddCov;
+    CR->minAddCov = SC->AddCov;
+    CR->maxAddFiles = SC->AddFiles;
+    CR->minAddFiles = SC->AddFiles;
     for (auto Idx : NewCov)
       if (auto *TE = TPC.PCTableEntryByIdx(Idx))
         if (TPC.PcIsFuncEntry(TE)){
@@ -332,48 +348,48 @@ struct GlobalEnv {
     
     Normalization(CR,SC,NumJobs);
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
-    if (Job->JobId >  NumJobs && Job->JobId < 100){
-	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles));
+    if (Job->JobId >  NumJobs && Job->JobId < 10000){
+	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov + SC->AddFiles));
 	    if (SC->AddFunctions) SC->Reward = SC->Reward * 2 ;
-	    SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+	    SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
 
     }
-    if (Job->JobId >= 100 && Job->JobId < 300){
-	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles));
+    /*if (Job->JobId >= 100 && Job->JobId < 300){
+	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov + SC->AddFiles));
             if (SC->AddFunctions) SC->Reward = SC->Reward * 5 ;
-            SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
 
     if(Job->JobId >= 300 && Job->JobId < 700){
 	    SC->Reward = (SC->Execs  + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
             if (SC->AddFunctions) SC->Reward = SC->Reward * 10 ;
-            SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= 700 && Job->JobId < 1000){
 	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
             if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
-            SC->Energy = 0.2*SC->Reward + (1 - 0.2)*SC->Energy;
+            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= 1000 && Job->JobId < 4000){
 	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
             if (SC->AddFunctions) SC->Reward = SC->Reward * 100 ;
-            SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= 4000){
 	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
             if (SC->AddFunctions) SC->Reward = SC->Reward * 300 ;
-            SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
-    }
+    }*/
     
     printf("Current Corpus Id: %d   SC->Execs :%f   SC->Reward :%f  S->Energy :%f	SC->AddFeatures:%f  SC->AddCov:%f  SC->AddFiles:%f  SC->AddFunctions:%f \n",SC->Id,SC->Execs,SC->Reward,SC->Energy,SC->AddFeatures,SC->AddCov,SC->AddFiles,SC->AddFunctions); 
     //清0
-    printf("Total Energy : %f\n",SC->EnergyTotal);
+    //printf("Total Energy : %f\n",SC->EnergyTotal);
     SC->Execs = 0 ;
     SC->AddFeatures = 0 ;
     SC->AddCov =  0;
@@ -455,7 +471,8 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
   int CorpusId = 0;
   int CorpusCount[120] = {0};
   double InitialEnergy = 0;
-  int JobExecuted = NumJobs;//记录执行的Jobs，当达到某一数值时，清空当前的子语料库能量，重新计算，避免Fuzz各阶段的不均衡
+  int JobExecuted = 0;//记录执行的Jobs，当达到某一数值时，清空当前的子语料库能量，重新计算，避免Fuzz各阶段的不均衡
+  int UpdateCtr = NumJobs;
   GlobalEnv Env;
   Env.Args = Args;
   Env.CorpusDirs = CorpusDirs;
@@ -563,7 +580,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       break;
     }
     JobExecuted++;
-    if (JobExecuted >= NumJobs * 3){
+    if (JobExecuted >= NumJobs * 5){
 	    for (int i=0; i<NumJobs ; i++){
 		    InitialEnergy += SC[i].Energy;
 	    }
@@ -574,11 +591,16 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
 	    printf("\n\n		重置能量		\n\n");
 	    JobExecuted = 0;
     }
-    UpdateWeight(arr, SC, NumJobs);
+    UpdateCtr++;
+    if (UpdateCtr >= NumJobs){
+	    UpdateWeight(arr, SC, NumJobs);
+	    UpdateCtr = 0;
+
+    }
     int CorpusId = PickWithWeight(arr,NumJobs);
     Instance[(((JobId++)-1)%NumJobs)] = CorpusId;
     FuzzQ.Push(Env.CreateNewJob(JobId,NumJobs,CorpusId));
-    printf("	JobId :%d	(JobId-1)%NumJobs :%d	   CorpusId : %d \n",JobId,(((JobId)-1)%NumJobs),CorpusId);
+    //printf("	JobId :%d	(JobId-1)%NumJobs :%d	   CorpusId : %d \n",JobId,(((JobId)-1)%NumJobs),CorpusId);
     CorpusCount[CorpusId]++;
     
   }

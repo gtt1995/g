@@ -348,10 +348,10 @@ struct GlobalEnv {
     
     Normalization(CR,SC,NumJobs);
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
-    if (Job->JobId >  NumJobs && Job->JobId < 10000){
+    if (Job->JobId >  2 && Job->JobId < 10000){
 	    SC->Reward = (SC->Execs + (SC->AddFeatures*20 + SC->AddCov*20 + SC->AddFiles*10));
 	    if (SC->AddFunctions) SC->Reward = SC->Reward * 3 ;
-	    SC->Energy = 0.8*SC->Reward + (1 - 0.2)*SC->Energy;
+	    SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
 
     }
@@ -580,7 +580,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       break;
     }
     JobExecuted++;
-    if (JobExecuted >= NumJobs * 50){
+    if (JobExecuted >= NumJobs * 50 || JobExecuted <2){
 	    for (int i=0; i<NumJobs ; i++){
 		    InitialEnergy += SC[i].Energy;
 	    }

@@ -349,8 +349,8 @@ struct GlobalEnv {
     Normalization(CR,SC,NumJobs);
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
     if (Job->JobId >  NumJobs && Job->JobId < 10000){
-	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov + SC->AddFiles));
-	    if (SC->AddFunctions) SC->Reward = SC->Reward * 2 ;
+	    SC->Reward = (SC->Execs + (SC->AddFeatures*20 + SC->AddCov*20 + SC->AddFiles*10));
+	    if (SC->AddFunctions) SC->Reward = SC->Reward * 3 ;
 	    SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
 
@@ -580,7 +580,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       break;
     }
     JobExecuted++;
-    if (JobExecuted >= NumJobs * 5){
+    if (JobExecuted >= NumJobs * 50){
 	    for (int i=0; i<NumJobs ; i++){
 		    InitialEnergy += SC[i].Energy;
 	    }
@@ -592,11 +592,12 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
 	    JobExecuted = 0;
     }
     UpdateCtr++;
-    if (UpdateCtr >= NumJobs){
+    /*if (UpdateCtr >= NumJobs){
 	    UpdateWeight(arr, SC, NumJobs);
 	    UpdateCtr = 0;
 
-    }
+    }*/
+    UpdateWeight(arr, SC, NumJobs);
     int CorpusId = PickWithWeight(arr,NumJobs);
     Instance[(((JobId++)-1)%NumJobs)] = CorpusId;
     FuzzQ.Push(Env.CreateNewJob(JobId,NumJobs,CorpusId));

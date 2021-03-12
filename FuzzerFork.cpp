@@ -348,21 +348,21 @@ struct GlobalEnv {
     
     Normalization(CR,SC,NumJobs);
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
-    if (Job->JobId >  1 && Job->JobId < 10000){
+    if (Job->JobId >  1 && Job->JobId < 3000){
 	    SC->Reward = (SC->Execs + (SC->AddFeatures*10 + SC->AddCov*10 + SC->AddFiles*10));
-	    if (SC->AddFunctions) SC->Reward = SC->Reward * 3 ;
-	    SC->Energy = 0.1*SC->Reward + (1 - 0.5)*SC->Energy;
+	    if (SC->AddFunctions) SC->Reward = SC->Reward * 5 ;
+	    SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
 
     }
-    /*if (Job->JobId >= 100 && Job->JobId < 300){
-	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov + SC->AddFiles));
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 5 ;
+    if (Job->JobId >= NumJobs*100 && Job->JobId < NumJobs*1000){
+	    SC->Reward = (SC->Execs + (SC->AddFeatures*50 + SC->AddCov*50 + SC->AddFiles*50));
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 40 ;
             SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
 
-    if(Job->JobId >= 300 && Job->JobId < 700){
+    /*if(Job->JobId >= 300 && Job->JobId < 700){
 	    SC->Reward = (SC->Execs  + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
             if (SC->AddFunctions) SC->Reward = SC->Reward * 10 ;
             SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
@@ -580,7 +580,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       break;
     }
     JobExecuted++;
-    if (JobExecuted >= NumJobs * 15 || JobId == 2*NumJobs +1){
+    if (JobExecuted >= NumJobs * 20 || JobId == 2*NumJobs +1){
 	    for (int i=0; i<NumJobs ; i++){
 		    InitialEnergy += SC[i].Energy;
 	    }

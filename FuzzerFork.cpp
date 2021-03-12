@@ -349,7 +349,7 @@ struct GlobalEnv {
     Normalization(CR,SC,NumJobs);
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
     if (Job->JobId >  1 && Job->JobId < 3000){
-	    SC->Reward = (SC->Execs + (SC->AddFeatures*10 + SC->AddCov*10 + SC->AddFiles*10));
+	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov + SC->AddFiles));
 	    if (SC->AddFunctions) SC->Reward = SC->Reward * 5 ;
 	    SC->Energy = 0.9*SC->Reward + (1 - 0.9)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;

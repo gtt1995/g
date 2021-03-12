@@ -580,7 +580,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       break;
     }
     JobExecuted++;
-    if (JobExecuted >= NumJobs * 50 || JobId == 2*NumJobs +1){
+    if (JobExecuted >= NumJobs * 15 || JobId == 2*NumJobs +1){
 	    for (int i=0; i<NumJobs ; i++){
 		    InitialEnergy += SC[i].Energy;
 	    }

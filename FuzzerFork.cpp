@@ -351,7 +351,7 @@ struct GlobalEnv {
     if (Job->JobId >  1 && Job->JobId < 3000){
 	    SC->Reward = (SC->Execs + (SC->AddFeatures*10 + SC->AddCov*10 + SC->AddFiles*10));
 	    if (SC->AddFunctions) SC->Reward = SC->Reward * 5 ;
-	    SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
+	    SC->Energy = 0.9*SC->Reward + (1 - 0.9)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
 
     }

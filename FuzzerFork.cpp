@@ -27,6 +27,7 @@
 #include <sstream>
 #include <thread>
 #include <random>
+#include <math.h>
 
 namespace fuzzer {
 
@@ -38,8 +39,8 @@ struct Stats {
 //定义子语料库结构体
 struct SubCorpus {
   size_t Id;
-  double Energy;
-  double Reward;
+  double Energy = 5;
+  double Reward = 0;
   //Set<uint32_t> AddFeatures = 0;
   double AddFeatures = 0;
   //Set<uint32_t> AddCov = 0;
@@ -68,16 +69,15 @@ struct Current_MAX_MIN{
 double arr[120] = {0};
 
 void Normalization(struct Current_MAX_MIN *CR,struct SubCorpus *SC, int NumJobs){
-	int j = 0;
 	CR->maxExecs = CR->CurrentExecs[1];
-	CR->minExecs = CR->CurrentExecs[1];
+	CR->minExecs = CR->CurrentExecs[2];
 	CR->maxAddFeatures = CR->CurrentAddFeatures[1];
-	CR->minAddFeatures = CR->CurrentAddFeatures[1];
+	CR->minAddFeatures = CR->CurrentAddFeatures[2];
 	CR->maxAddCov = CR->CurrentAddCov[1];
-	CR->minAddCov = CR->CurrentAddCov[1];
+	CR->minAddCov = CR->CurrentAddCov[2];
         CR->maxAddFiles = CR->CurrentAddFiles[1];
-        CR->minAddFiles = CR->CurrentAddFiles[1];
-	for (int i = 0; i < NumJobs ; i++){
+        CR->minAddFiles = CR->CurrentAddFiles[2];
+	for (int j = 0; j < NumJobs ; j++){
 		if (CR->CurrentExecs[j] > CR->maxExecs) CR->maxExecs = CR->CurrentExecs[j];
 		if (CR->CurrentExecs[j] < CR->minExecs) CR->minExecs = CR->CurrentExecs[j];
 		if (CR->CurrentAddFeatures[j] > CR->maxAddFeatures) CR->maxAddFeatures = CR->CurrentAddFeatures[j];
@@ -86,11 +86,14 @@ void Normalization(struct Current_MAX_MIN *CR,struct SubCorpus *SC, int NumJobs)
                 if (CR->CurrentAddCov[j] < CR->minAddCov) CR->minAddCov = CR->CurrentAddCov[j];
 		if (CR->CurrentAddFiles[j] > CR->maxAddFiles) CR->maxAddFiles = CR->CurrentAddFiles[j];
                 if (CR->CurrentAddFiles[j] < CR->minAddFiles) CR->minAddFiles = CR->CurrentAddFiles[j];
-		j++;
     }
+	if(CR->maxExecs==CR->minExecs) CR->maxExecs = CR->minExecs + 1;
 	SC->Execs = (SC->Execs - CR->minExecs)/(CR->maxExecs - CR->minExecs);
+	if(CR->maxAddFeatures==CR->minAddFeatures) CR->maxAddFeatures = CR->minAddFeatures + 1;
 	SC->AddFeatures = (SC->AddFeatures - CR->minAddFeatures)/(CR->maxAddFeatures - CR->minAddFeatures);
+	if(CR->maxAddCov==CR->minAddCov) CR->maxAddCov = CR->minAddCov + 1;
 	SC->AddCov = (SC->AddCov - CR->minAddCov)/(CR->maxAddCov - CR->minAddCov);
+	if(CR->maxAddFiles==CR->minAddFiles) CR->maxAddFiles = CR->minAddFiles + 1;
 	SC->AddFiles = (SC->AddFiles - CR->minAddFiles)/(CR->maxAddFiles - CR->minAddFiles);
 
 }
@@ -237,7 +240,7 @@ struct GlobalEnv {
         	CollectDFT(SF);
 	}
 	else  {
-		auto &SF = Files[Files.size()/2];
+		auto &SF = Files[Rand->SkewTowardsLast(Files.size())];
         	Seeds += (Seeds.empty() ? "" : ",") + SF;
         	CollectDFT(SF);
 	} 
@@ -278,7 +281,7 @@ struct GlobalEnv {
     return Job;
   }
 
-  void RunOneMergeJob(FuzzJob *Job, struct SubCorpus * SC, struct Current_MAX_MIN *CR, int NumJobs) {
+  void RunOneMergeJob(FuzzJob *Job, struct SubCorpus * SC, struct Current_MAX_MIN *CR, int NumJobs , int a) {
     auto Stats = ParseFinalStatsFromLog(Job->LogPath);
     NumRuns += Stats.number_of_executed_units;
 
@@ -302,7 +305,7 @@ struct GlobalEnv {
       }
     }
     // if (!FilesToAdd.empty() || Job->ExitCode != 0)
-    Printf("###%zd: cov: %zd ft: %zd corp: %zd exec/s %zd "
+    Printf("#%zd: cov: %zd ft: %zd corp: %zd exec/s %zd "
            "oom/timeout/crash: %zd/%zd/%zd time: %zds job: %zd dft_time: %d\n",
            NumRuns, Cov.size(), Features.size(), Files.size(),
            Stats.average_exec_per_sec, NumOOMs, NumTimeouts, NumCrashes,
@@ -346,20 +349,19 @@ struct GlobalEnv {
 	  SC->AddFunctions++;
 	}
     
+    double b = (double)a/10;
     Normalization(CR,SC,NumJobs);
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
-    if (Job->JobId >  1 && Job->JobId < 3000){
-	    SC->Reward = (SC->Execs*10 + (SC->AddFeatures + SC->AddCov + SC->AddFiles));
-	    if (SC->AddFunctions) SC->Reward = SC->Reward * 5 ;
-	    SC->Energy = 0.1*SC->Reward + (1 - 0.1)*SC->Energy;
-	    SC->EnergyTotal+=SC->Energy;
-
-    }
+    if (Job->JobId >  1 && Job->JobId < 100*NumJobs){
+	    SC->Reward = SC->Execs*2 + (SC->AddFeatures*5 + SC->AddCov*10 + SC->AddFiles*3);
+	    if (SC->AddFunctions) SC->Reward = SC->Reward * 10 ;
+	    SC->Energy = b * SC->Reward + (1 - b)*SC->Energy;
+    } 
     if (Job->JobId >= NumJobs*100 && Job->JobId < NumJobs*1000){
 	    SC->Reward = (SC->Execs + (SC->AddFeatures*50 + SC->AddCov*50 + SC->AddFiles*50));
             if (SC->AddFunctions) SC->Reward = SC->Reward * 40 ;
             SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
-	    SC->EnergyTotal+=SC->Energy;
+	    //SC->EnergyTotal+=SC->Energy;
     }
 
     /*if(Job->JobId >= 300 && Job->JobId < 700){
@@ -455,7 +457,7 @@ void WorkerThread(JobQueue *FuzzQ, JobQueue *MergeQ) {
 // This is just a skeleton of an experimental -fork=1 feature.
 void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
                   const Vector<std::string> &Args,
-                  const Vector<std::string> &CorpusDirs, int NumJobs) {
+                  const Vector<std::string> &CorpusDirs, int NumJobs, int a) {
   Printf("INFO: -fork=%d: fuzzing in separate process(s)\n", NumJobs);
   
   struct SubCorpus SC[NumJobs];//定义子语料库结构体
@@ -464,7 +466,6 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
   int Instance[NumJobs] ;//保存当前JobId取模后对应选取的子语料库Id
   for (size_t j = 0; j < NumJobs; j++){
 	  SC[j].Id = j;
-	  SC[j].Energy = 1;
 	  Instance[j] = j;
 	  //sc[j] = &SC[j];
   }
@@ -536,7 +537,26 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
     }
     Fuzzer::MaybeExitGracefully();
     
-    Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]], &CR, NumJobs); 
+    Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]], &CR, NumJobs,a);
+    if (JobExecuted >= NumJobs * 40){
+            for (int i=0; i<NumJobs ; i++){
+                    InitialEnergy += SC[i].Energy;
+            }
+            InitialEnergy = InitialEnergy/NumJobs;
+            for (int i=0; i<NumJobs ; i++){
+                    SC[i].Energy = InitialEnergy;
+            }
+            printf("\n\n                重置能量                \n\n");
+            JobExecuted = 0;
+    }
+    if (JobId >NumJobs){
+            UpdateWeight(arr, SC, NumJobs);
+            //UpdateCtr = 0;
+
+    }
+    //UpdateWeight(arr, SC, NumJobs);
+    int CorpusId = PickWithWeight(arr,NumJobs);
+    Instance[(((JobId++)-1)%NumJobs)] = CorpusId;
     // Continue if our crash is one of the ignorred ones.
     if (Options.IgnoreTimeouts && ExitCode == Options.TimeoutExitCode)
       Env.NumTimeouts++;
@@ -548,7 +568,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
         std::ifstream In(Job->LogPath);
         std::string Line;
         while (std::getline(In, Line, '\n'))
-          if (Line.find("ERROR:") != Line.npos ||
+          if (Line.find("ERROR:123") != Line.npos ||
               Line.find("runtime error:") != Line.npos)
             Printf("%s\n", Line.c_str());
       } else {
@@ -580,7 +600,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       break;
     }
     JobExecuted++;
-    if (JobExecuted >= NumJobs * 20 || JobId == 2*NumJobs +1){
+    /*if (JobExecuted >= NumJobs * 20 || JobId == 2*NumJobs +1){
 	    for (int i=0; i<NumJobs ; i++){
 		    InitialEnergy += SC[i].Energy;
 	    }
@@ -590,16 +610,16 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
 	    }
 	    printf("\n\n		重置能量		\n\n");
 	    JobExecuted = 0;
-    }
-    UpdateCtr++;
-    if (JobId >2*NumJobs){
+    }*/
+    //UpdateCtr++;
+    /*if (JobId >NumJobs){
 	    UpdateWeight(arr, SC, NumJobs);
 	    //UpdateCtr = 0;
 
     }
     //UpdateWeight(arr, SC, NumJobs);
     int CorpusId = PickWithWeight(arr,NumJobs);
-    Instance[(((JobId++)-1)%NumJobs)] = CorpusId;
+    Instance[(((JobId++)-1)%NumJobs)] = CorpusId;*/
     FuzzQ.Push(Env.CreateNewJob(JobId,NumJobs,CorpusId));
     //printf("	JobId :%d	(JobId-1)%NumJobs :%d	   CorpusId : %d \n",JobId,(((JobId)-1)%NumJobs),CorpusId);
     CorpusCount[CorpusId]++;

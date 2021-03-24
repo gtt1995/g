@@ -352,42 +352,42 @@ struct GlobalEnv {
     double b = (double)a/10;
     Normalization(CR,SC,NumJobs);
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
-    if (Job->JobId >  1 && Job->JobId < 100*NumJobs){
-	    SC->Reward = SC->Execs*10 + (SC->AddFeatures*10 + SC->AddCov*100 + SC->AddFiles*10);
+    if (Job->JobId >  1 && Job->JobId < 24*NumJobs){
+	    SC->Reward = SC->Execs*50 + (SC->AddFeatures*10 + SC->AddCov*100 + SC->AddFiles*10);
 	    if (SC->AddFunctions) SC->Reward = SC->Reward * 100 ;
 	    SC->Energy = b * SC->Reward + (1 - b)*SC->Energy;
     } 
-    if (Job->JobId >= NumJobs*100 ){
-	    SC->Reward = (SC->Execs*10 + (SC->AddFeatures*20 + SC->AddCov*300 + SC->AddFiles*20));
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 300 ;
+    if (Job->JobId >= NumJobs*24 &&Job->JobId < NumJobs*48 ){
+	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures*20 + SC->AddCov*600 + SC->AddFiles*20));
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 100 ;
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    //SC->EnergyTotal+=SC->Energy;
     }
 
-    /*if(Job->JobId >= 300 && Job->JobId < 700){
-	    SC->Reward = (SC->Execs  + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 10 ;
-            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
-	    SC->EnergyTotal+=SC->Energy;
-    }
-    if(Job->JobId >= 700 && Job->JobId < 1000){
-	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
+    if(Job->JobId >= NumJobs*48 && Job->JobId < NumJobs*72){
+	    SC->Reward = (SC->Execs*50  + (SC->AddFeatures + SC->AddCov*100 + SC->AddFiles)*10);
             if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
-            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
+            SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
-    if(Job->JobId >= 1000 && Job->JobId < 4000){
-	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 100 ;
-            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
+    if(Job->JobId >= NumJobs*72 && Job->JobId < NumJobs*108){
+	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures + SC->AddCov*100 + SC->AddFiles)*10);
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
+            SC->Energy = 0.4*SC->Reward + (1 - 0.4)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
-    if(Job->JobId >= 4000){
-	    SC->Reward = (SC->Execs + (SC->AddFeatures + SC->AddCov*10 + SC->AddFiles)*10);
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 300 ;
-            SC->Energy = 0.5*SC->Reward + (1 - 0.5)*SC->Energy;
+    if(Job->JobId >= NumJobs*108 && Job->JobId < NumJobs*168){
+	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures + SC->AddCov*200 + SC->AddFiles)*10);
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
+            SC->Energy = 0.3*SC->Reward + (1 - 0.3)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
-    }*/
+    }
+    if(Job->JobId >= NumJobs*168){
+	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures*10 + SC->AddCov*3000 + SC->AddFiles*10));
+            if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
+            SC->Energy = 0.2*SC->Reward + (1 - 0.2)*SC->Energy;
+	    SC->EnergyTotal+=SC->Energy;
+    }
     
     printf("Current Corpus Id: %d   SC->Execs :%f   SC->Reward :%f  S->Energy :%f	SC->AddFeatures:%f  SC->AddCov:%f  SC->AddFiles:%f  SC->AddFunctions:%f \n",SC->Id,SC->Execs,SC->Reward,SC->Energy,SC->AddFeatures,SC->AddCov,SC->AddFiles,SC->AddFunctions); 
     //清0
@@ -538,7 +538,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
     Fuzzer::MaybeExitGracefully();
     
     Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]], &CR, NumJobs,a);
-    if (JobExecuted >= NumJobs * 40){
+    if (JobExecuted >= NumJobs * 12){
             for (int i=0; i<NumJobs ; i++){
                     InitialEnergy += SC[i].Energy;
             }
@@ -549,6 +549,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
             printf("\n\n                重置能量                \n\n");
             JobExecuted = 0;
     }
+    JobExecuted++;
     if (JobId >NumJobs){
             UpdateWeight(arr, SC, NumJobs);
             //UpdateCtr = 0;
@@ -599,7 +600,6 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
       StopJobs();
       break;
     }
-    JobExecuted++;
     /*if (JobExecuted >= NumJobs * 20 || JobId == 2*NumJobs +1){
 	    for (int i=0; i<NumJobs ; i++){
 		    InitialEnergy += SC[i].Energy;

@@ -358,7 +358,7 @@ struct GlobalEnv {
 	    SC->Energy = b * SC->Reward + (1 - b)*SC->Energy;
     } 
     if (Job->JobId >= NumJobs*24 &&Job->JobId < NumJobs*48 ){
-	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures*20 + SC->AddCov*600 + SC->AddFiles*20));
+	    SC->Reward = (SC->Execs*200 + (SC->AddFeatures*20 + SC->AddCov*600 + SC->AddFiles*20));
             if (SC->AddFunctions) SC->Reward = SC->Reward * 10 ;
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    //SC->EnergyTotal+=SC->Energy;
@@ -538,7 +538,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
     Fuzzer::MaybeExitGracefully();
     
     Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]], &CR, NumJobs,a);
-    if (JobExecuted >= NumJobs * 12){
+    /*if (JobExecuted >= NumJobs * 12){
             for (int i=0; i<NumJobs ; i++){
                     InitialEnergy += SC[i].Energy;
             }
@@ -549,7 +549,7 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
             printf("\n\n                重置能量                \n\n");
             JobExecuted = 0;
     }
-    JobExecuted++;
+    JobExecuted++;*/
     if (JobId >NumJobs){
             UpdateWeight(arr, SC, NumJobs);
             //UpdateCtr = 0;

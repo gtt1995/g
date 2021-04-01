@@ -281,7 +281,7 @@ struct GlobalEnv {
     return Job;
   }
 
-  void RunOneMergeJob(FuzzJob *Job, struct SubCorpus * SC, struct Current_MAX_MIN *CR, int NumJobs , int a) {
+  void RunOneMergeJob(FuzzJob *Job, struct SubCorpus * SC, struct Current_MAX_MIN *CR, int NumJobs , int coe, int cov, int exec) {
     auto Stats = ParseFinalStatsFromLog(Job->LogPath);
     NumRuns += Stats.number_of_executed_units;
 
@@ -349,43 +349,43 @@ struct GlobalEnv {
 	  SC->AddFunctions++;
 	}
     
-    double b = (double)a/10;
+    double b = (double)coe/10;
     Normalization(CR,SC,NumJobs);
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
     if (Job->JobId >  1 && Job->JobId < 24*NumJobs){
-	    SC->Reward = SC->Execs*500 + (SC->AddFeatures*10 + SC->AddCov*100 + SC->AddFiles*10);
-	    if (SC->AddFunctions) SC->Reward = SC->Reward * 10 ;
+	    SC->Reward = SC->Execs*exec + (SC->AddFeatures*cov + SC->AddCov*cov*10 + SC->AddFiles*cov);
+	    if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs) ;
 	    SC->Energy = b * SC->Reward + (1 - b)*SC->Energy;
     } 
     if (Job->JobId >= NumJobs*24 &&Job->JobId < NumJobs*48 ){
-	    SC->Reward = (SC->Execs*200 + (SC->AddFeatures*20 + SC->AddCov*600 + SC->AddFiles*20));
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 10 ;
+	    SC->Reward = (SC->Execs*exec + (SC->AddFeatures*cov + SC->AddCov*cov*10 + SC->AddFiles*cov));
+            if (SC->AddFunctions) SC->Reward = SC->Reward *  (Job->Id/NumJobs);
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    //SC->EnergyTotal+=SC->Energy;
     }
 
     if(Job->JobId >= NumJobs*48 && Job->JobId < NumJobs*72){
-	    SC->Reward = (SC->Execs*50  + (SC->AddFeatures + SC->AddCov*100 + SC->AddFiles)*10);
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
+	    SC->Reward = (SC->Execs*exec  + (SC->AddFeatures*cov + SC->AddCov*cov*10 + SC->AddFiles*cov));
+            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs);
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= NumJobs*72 && Job->JobId < NumJobs*108){
-	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures + SC->AddCov*100 + SC->AddFiles)*10);
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
-            SC->Energy = 0.4*SC->Reward + (1 - 0.4)*SC->Energy;
+	    SC->Reward = (SC->Execs*exec + (SC->AddFeatures*cov + SC->AddCov*cov*10 + SC->AddFiles*cov));
+            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs);
+            SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= NumJobs*108 && Job->JobId < NumJobs*168){
-	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures + SC->AddCov*200 + SC->AddFiles)*10);
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
-            SC->Energy = 0.3*SC->Reward + (1 - 0.3)*SC->Energy;
+	    SC->Reward = (SC->Execs*exec + (SC->AddFeatures + SC->AddCov*cov*10 + SC->AddFiles*cov));
+            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs);
+            SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= NumJobs*168){
-	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures*10 + SC->AddCov*3000 + SC->AddFiles*10));
-            if (SC->AddFunctions) SC->Reward = SC->Reward * 50 ;
-            SC->Energy = 0.2*SC->Reward + (1 - 0.2)*SC->Energy;
+	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures*cov*10 + SC->AddCov*cov*100 + SC->AddFiles**cov*10));
+            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs);
+            SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     
@@ -457,7 +457,7 @@ void WorkerThread(JobQueue *FuzzQ, JobQueue *MergeQ) {
 // This is just a skeleton of an experimental -fork=1 feature.
 void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
                   const Vector<std::string> &Args,
-                  const Vector<std::string> &CorpusDirs, int NumJobs, int a) {
+                  const Vector<std::string> &CorpusDirs, int NumJobs, int coe, int period, int cov, int exec) {
   Printf("INFO: -fork=%d: fuzzing in separate process(s)\n", NumJobs);
   
   struct SubCorpus SC[NumJobs];//定义子语料库结构体
@@ -537,8 +537,8 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
     }
     Fuzzer::MaybeExitGracefully();
     
-    Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]], &CR, NumJobs,a);
-    /*if (JobExecuted >= NumJobs * 12){
+    Env.RunOneMergeJob(Job.get(),&SC[Instance[(Job->JobId-1)%NumJobs]], &CR, NumJobs, coe, cov ,exec);
+    if (JobExecuted >= NumJobs * period){
             for (int i=0; i<NumJobs ; i++){
                     InitialEnergy += SC[i].Energy;
             }
@@ -546,10 +546,10 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
             for (int i=0; i<NumJobs ; i++){
                     SC[i].Energy = InitialEnergy;
             }
-            printf("\n\n                重置能量                \n\n");
+            printf("\n\n                调度能量                \n\n");
             JobExecuted = 0;
     }
-    JobExecuted++;*/
+    JobExecuted++;
     if (JobId >NumJobs){
             UpdateWeight(arr, SC, NumJobs);
             //UpdateCtr = 0;

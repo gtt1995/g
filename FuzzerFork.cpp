@@ -354,37 +354,37 @@ struct GlobalEnv {
     //把Fuzz过程分几个阶段，计算Energy，前n个job变化剧烈，不计算能量，此段fuzz特征增长较明显
     if (Job->JobId >  1 && Job->JobId < 24*NumJobs){
 	    SC->Reward = SC->Execs*exec + (SC->AddFeatures*cov + SC->AddCov*cov*10 + SC->AddFiles*cov);
-	    if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs) ;
+	    if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->JobId/NumJobs) ;
 	    SC->Energy = b * SC->Reward + (1 - b)*SC->Energy;
     } 
     if (Job->JobId >= NumJobs*24 &&Job->JobId < NumJobs*48 ){
 	    SC->Reward = (SC->Execs*exec + (SC->AddFeatures*cov + SC->AddCov*cov*10 + SC->AddFiles*cov));
-            if (SC->AddFunctions) SC->Reward = SC->Reward *  (Job->Id/NumJobs);
+            if (SC->AddFunctions) SC->Reward = SC->Reward *  (Job->JobId/NumJobs);
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    //SC->EnergyTotal+=SC->Energy;
     }
 
     if(Job->JobId >= NumJobs*48 && Job->JobId < NumJobs*72){
 	    SC->Reward = (SC->Execs*exec  + (SC->AddFeatures*cov + SC->AddCov*cov*10 + SC->AddFiles*cov));
-            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs);
+            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->JobId/NumJobs);
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= NumJobs*72 && Job->JobId < NumJobs*108){
 	    SC->Reward = (SC->Execs*exec + (SC->AddFeatures*cov + SC->AddCov*cov*10 + SC->AddFiles*cov));
-            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs);
+            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->JobId/NumJobs);
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= NumJobs*108 && Job->JobId < NumJobs*168){
 	    SC->Reward = (SC->Execs*exec + (SC->AddFeatures + SC->AddCov*cov*10 + SC->AddFiles*cov));
-            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs);
+            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->JobId/NumJobs);
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
     if(Job->JobId >= NumJobs*168){
-	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures*cov*10 + SC->AddCov*cov*100 + SC->AddFiles**cov*10));
-            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->Id/NumJobs);
+	    SC->Reward = (SC->Execs*50 + (SC->AddFeatures*cov*10 + SC->AddCov*cov*100 + SC->AddFiles*cov*10));
+            if (SC->AddFunctions) SC->Reward = SC->Reward * (Job->JobId/NumJobs);
             SC->Energy = b*SC->Reward + (1 - b)*SC->Energy;
 	    SC->EnergyTotal+=SC->Energy;
     }
